@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f8f4e9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="description" content="Block Bloom is a free, ad-free block puzzle. Play on your phone or computer, even offline.">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="/style.css">
+  <title>Block Bloom — a little puzzle for your day</title>
+</head>
+<body>
+  <div class="site-shell">
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Block Bloom home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span>block<span class="brand-accent">bloom</span><span class="brand-period">.</span></span>
+      </a>
+      <button class="icon-button help-button" id="help-button" type="button" aria-label="How to play" title="How to play">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.3 2.3 0 1 1 3.8 1.7c-1.1.9-1.6 1.4-1.6 2.6M12 16.8h.01"/></svg>
+      </button>
+    </header>
+
+    <main class="game-layout">
+      <section class="game-area" aria-label="Block Bloom game">
+        <div class="game-heading">
+          <div>
+            <h1>Make room for joy.</h1>
+            <p>Place blocks. Clear lines. Keep blooming.</p>
+          </div>
+          <div class="scores" aria-live="polite">
+            <div class="score-card"><span>Score</span><strong id="score">0</strong></div>
+            <div class="score-card best"><span>Best</span><strong id="best">0</strong></div>
+          </div>
+        </div>
+
+        <div class="board-wrap">
+          <div class="board-frame">
+            <div id="board" class="board" role="grid" aria-label="8 by 8 game board"></div>
+            <div id="board-flash" class="board-flash" aria-hidden="true"></div>
+          </div>
+          <div class="board-foot">
+            <span id="status" class="status" role="status" aria-live="polite">Pick a piece to begin</span>
+            <button id="new-game" class="text-button" type="button">New game <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg></button>
+          </div>
+        </div>
+
+        <section class="tray-section" aria-label="Available pieces">
+          <div class="tray-head"><h2>Your pieces</h2><span>Drag or tap to place</span></div>
+          <div id="tray" class="tray"></div>
+        </section>
+      </section>
+
+      <aside class="side-note">
+        <div class="note-art" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <p class="note-title">A fresh little break.</p>
+        <p>Three shapes at a time. Fill a row or column to watch it clear. No rush, no ads, just one more move.</p>
+        <div class="note-rule"></div>
+        <p class="note-small">Made for fingers, mouse clicks, and quiet moments.</p>
+      </aside>
+    </main>
+
+    <footer class="site-footer"><span>Free forever. No ads. No tracking.</span><span>Your game stays on this device.</span></footer>
+  </div>
+
+  <div id="drag-ghost" class="drag-ghost" aria-hidden="true"></div>
+
+  <dialog id="help-dialog" class="game-dialog">
+    <h2>How to play</h2>
+    <p>Drag a shape onto the board, or tap a shape and then tap where its top-left corner should go.</p>
+    <p>Fill a complete row or column to clear it. Use all three shapes to get a fresh set. The game ends when none of your pieces fit.</p>
+    <p class="dialog-tip">On iPhone, choose <strong>Share → Add to Home Screen</strong> to play like an app.</p>
+    <button class="primary-button" id="close-help" type="button">Let’s play</button>
+  </dialog>
+
+  <dialog id="game-over-dialog" class="game-dialog game-over-dialog">
+    <h2>A lovely run.</h2>
+    <p>You made room for <strong id="final-score">0</strong> points.</p>
+    <p id="record-message" class="dialog-tip"></p>
+    <button class="primary-button" id="play-again" type="button">Play again</button>
+  </dialog>
+
+  <dialog id="restart-dialog" class="game-dialog">
+    <h2>Start fresh?</h2>
+    <p>Your current puzzle will be replaced. Your best score stays.</p>
+    <div class="dialog-actions"><button class="secondary-button" id="cancel-restart" type="button">Keep playing</button><button class="primary-button" id="confirm-restart" type="button">New game</button></div>
+  </dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

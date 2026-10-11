@@ -1,0 +1,12 @@
+{
+  "name": "block-bloom",
+  "version": "1.0.0",
+  "private": false,
+  "type": "module",
+  "description": "A free, ad-free block puzzle for phones and computers",
+  "scripts": {
+    "dev": "python3 -m http.server 8080 -d public",
+    "test": "node --test"
+  },
+  "license": "MIT"
+}

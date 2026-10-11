@@ -1,0 +1,10 @@
+node_modules
+.git
+.gitignore
+.dockerignore
+test
+coverage
+playwright-report
+test-results
+graft
+.env*
