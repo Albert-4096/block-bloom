@@ -2,6 +2,8 @@
 
 A free, ad-free block puzzle built for iPhone and desktop browsers. Place three shapes at a time on an 8×8 board. Full rows and columns clear; the game continues until none of the available pieces fit.
 
+**Play online:** [block-bloom.alberyt.xyz](https://block-bloom.alberyt.xyz)
+
 ![Block Bloom on a phone](docs/preview-mobile.png)
 
 [View the desktop layout](docs/preview-desktop.png)
