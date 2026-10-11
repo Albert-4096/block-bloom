@@ -1,0 +1,15 @@
+name: block-bloom
+
+services:
+  web:
+    build: .
+    image: block-bloom:latest
+    restart: unless-stopped
+    ports:
+      - "${BLOCK_BLOOM_PORT:?Set BLOCK_BLOOM_PORT}:80"
+    networks:
+      - edge
+
+networks:
+  edge:
+    external: true

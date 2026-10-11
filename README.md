@@ -26,9 +26,18 @@ Without Docker, run `npm run dev` (requires Python 3) and open <http://localhost
 - Fill any row or column to clear it. Consecutive clears and multiple lines earn extra points.
 - Progress and the best score are saved in this browser's local storage.
 
-## Publish later
+## Deployment
 
 This is a static site. Upload the contents of `public/` to any HTTPS static host, or deploy the Docker image to a container host. No build step, API keys, database, analytics, ads, or third-party runtime requests are needed. Use HTTPS for service workers and iPhone **Share → Add to Home Screen**.
+
+For a server with an existing Docker network named `edge`, the included `compose.yaml` builds and runs the site. Set a free host port in an untracked `.env` file:
+
+```sh
+printf 'BLOCK_BLOOM_PORT=12345\n' > .env
+docker compose up -d --build
+```
+
+Replace `12345` with the chosen port. Update with `git pull --ff-only && docker compose up -d --build`. A direct `http://SERVER:PORT` URL serves the game, while offline caching on phones requires an HTTPS reverse proxy or HTTPS static host.
 
 ## Privacy and source
 
