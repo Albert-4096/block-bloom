@@ -1,4 +1,5 @@
 import { SIZE, SHAPES, COLORS, emptyBoard, dimensions, canPlace, hasMove, place, drawPieces } from './game.js';
+import { FX, createEffects } from './fx.js';
 
 const STORAGE_KEY = 'block-bloom-save-v1';
 const boardEl = document.querySelector('#board');
@@ -7,12 +8,15 @@ const ghostEl = document.querySelector('#drag-ghost');
 const statusEl = document.querySelector('#status');
 const scoreEl = document.querySelector('#score');
 const bestEl = document.querySelector('#best');
-const scoreBurstEl = document.querySelector('#score-burst');
 const flashEl = document.querySelector('#board-flash');
 const clearLayerEl = document.querySelector('#clear-layer');
 const helpDialog = document.querySelector('#help-dialog');
 const gameOverDialog = document.querySelector('#game-over-dialog');
 const restartDialog = document.querySelector('#restart-dialog');
+const effects = createEffects({ board: boardEl, frame: document.querySelector('.board-frame'), layer: clearLayerEl,
+  flash: flashEl, score: scoreEl, scoreCard: document.querySelector('.score-current'),
+  badge: document.querySelector('#streak-badge'), overlay: document.querySelector('#fx-overlay'),
+  debug: document.querySelector('#fx-debug'), fps: document.querySelector('#debug-fps') });
 
 function readSave() {
   try {
@@ -37,7 +41,6 @@ let state = previous || { board: emptyBoard(), pieces: drawPieces(emptyBoard()),
 let selected = null;
 let drag = null;
 let preview = null;
-let scoreBurstTimer = null;
 
 function save() {
   try {
@@ -127,7 +130,6 @@ function renderTray(refilled = false) {
 function render(placedCells = [], refilled = false) {
   renderBoard(placedCells);
   renderTray(refilled);
-  scoreEl.textContent = state.score.toLocaleString();
   bestEl.textContent = state.best.toLocaleString();
   save();
 }
@@ -140,11 +142,15 @@ function clearPreview() {
 }
 
 function showPreview(index, row, col) {
+  const old = preview;
   clearPreview();
   const piece = state.pieces[index];
   if (!piece) return;
   const valid = canPlace(state.board, piece.shape, row, col);
   preview = { index, row, col, valid };
+  if (valid && drag && !drag.snappedSound && (!old || !old.valid || old.row !== row || old.col !== col)) {
+    effects.sound('click'); drag.snappedSound = true;
+  }
   for (const [dr, dc] of piece.shape.cells) {
     const r = row + dr;
     const c = col + dc;
@@ -163,45 +169,6 @@ function showPreview(index, row, col) {
         for (let r = 0; r < SIZE; r++) boardEl.children[r * SIZE + c].classList.add('preview-clear');
       }
     }
-  }
-}
-
-function celebrateClear(before, result, placedCells, pieceColor) {
-  const layer = document.createElement('div');
-  layer.className = 'clear-grid';
-  const placed = new Map(placedCells.map(([row, col]) => [row * SIZE + col, pieceColor]));
-  for (let row = 0; row < SIZE; row++) {
-    for (let col = 0; col < SIZE; col++) {
-      if (!result.rows.includes(row) && !result.cols.includes(col)) continue;
-      const color = placed.get(row * SIZE + col) || before[row][col];
-      if (!color) continue;
-      const cell = document.createElement('span');
-      cell.className = 'clear-cell';
-      cell.style.gridRow = row + 1;
-      cell.style.gridColumn = col + 1;
-      cell.style.setProperty('--clear-delay', `${Math.min(180, (row + col) * 14)}ms`);
-      cell.append(makeTile(color));
-      layer.append(cell);
-    }
-  }
-  clearLayerEl.append(layer);
-  window.setTimeout(() => layer.remove(), 680);
-}
-
-function showScoreGain(points, lines) {
-  scoreBurstEl.textContent = `+${points}`;
-  scoreBurstEl.classList.remove('is-visible');
-  void scoreBurstEl.offsetWidth;
-  scoreBurstEl.classList.add('is-visible');
-  window.clearTimeout(scoreBurstTimer);
-  scoreBurstTimer = window.setTimeout(() => scoreBurstEl.classList.remove('is-visible'), 680);
-  scoreEl.classList.remove('score-pulse');
-  void scoreEl.offsetWidth;
-  scoreEl.classList.add('score-pulse');
-  if (lines) {
-    flashEl.classList.remove('flash');
-    void flashEl.offsetWidth;
-    flashEl.classList.add('flash');
   }
 }
 
@@ -225,9 +192,7 @@ function commit(index, row, col) {
     setStatus('That spot is blocked. Try another square.');
     return false;
   }
-  if (result.lines) {
-    celebrateClear(before, result, placedCells, piece.color);
-  }
+  effects.scoreSnap(state.score);
   const oldBest = state.best;
   state.board = result.board;
   state.score += result.points;
@@ -239,7 +204,12 @@ function commit(index, row, col) {
   const refilled = state.pieces.every(piece => piece === null);
   if (refilled) state.pieces = drawPieces(state.board);
   render(placedCells, refilled);
-  showScoreGain(result.points, result.lines);
+  const placementPoints = piece.shape.cells.length * 10;
+  effects.scoreSnap(state.score - (result.lines ? result.points - placementPoints : 0));
+  if (result.lines) effects.clear({ before, placedCells, pieceColor: piece.color, result,
+    gain: result.points - placementPoints, target: state.score });
+  else { effects.breakStreak(); effects.sound('place'); effects.vibrate(FX.haptic.place); }
+  if (refilled) effects.refill();
   if (result.lines) {
     const lineMessage = result.lines > 1 ? `${result.lines} lines cleared` : 'Line cleared';
     setStatus(`${lineMessage}!${result.streak > 1 ? ` ${result.streak} in a row.` : ''} +${result.points}${state.score > oldBest && oldBest > 0 ? ' · New best!' : ''}`);
@@ -254,10 +224,7 @@ function resetGame() {
   state = { board: emptyBoard(), pieces: drawPieces(emptyBoard()), score: 0, best: state.best, streak: 0, ended: false };
   selected = null;
   clearPreview();
-  clearLayerEl.replaceChildren();
-  flashEl.classList.remove('flash');
-  window.clearTimeout(scoreBurstTimer);
-  scoreBurstEl.classList.remove('is-visible');
+  effects.reset(0);
   render();
   setStatus('Pick a piece to begin');
   if (gameOverDialog.open) gameOverDialog.close();
@@ -269,7 +236,7 @@ function ghostPosition(x, y, pointerType) {
   const { rows, cols } = dimensions(piece.shape);
   const cell = boardEl.getBoundingClientRect().width / SIZE;
   const left = x - (cols * cell) / 2;
-  const top = y - (rows * cell) / 2 - (pointerType === 'touch' ? 72 : 18);
+  const top = y - (rows * cell) / 2 - cell * (pointerType === 'touch' ? FX.drag.fingerOffsetCells : FX.drag.mouseOffsetCells);
   ghostEl.style.left = `${left}px`;
   ghostEl.style.top = `${top}px`;
   ghostEl.style.setProperty('--cell', `${cell}px`);
@@ -279,12 +246,13 @@ function ghostPosition(x, y, pointerType) {
 function updateDrag(event) {
   if (!drag) return;
   const moved = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
-  if (!drag.active && moved < 8) return;
+  if (!drag.active && moved < FX.drag.threshold) return;
   if (!drag.active) {
     drag.active = true;
     ghostEl.replaceChildren(makePieceGrid(state.pieces[drag.index]));
     ghostEl.classList.add('visible');
     document.body.classList.add('is-dragging');
+    effects.vibrate(FX.haptic.pickup);
   }
   const pos = ghostPosition(event.clientX, event.clientY, drag.pointerType);
   const rect = boardEl.getBoundingClientRect();
@@ -296,6 +264,7 @@ function updateDrag(event) {
 }
 
 trayEl.addEventListener('pointerdown', event => {
+  effects.unlock();
   const slot = event.target.closest('.piece-slot');
   if (!slot || slot.disabled || state.ended) return;
   const index = Number(slot.dataset.index);
@@ -309,6 +278,16 @@ function endDrag(event) {
   if (!drag) return;
   const { index, active } = drag;
   if (active && event.type !== 'pointercancel' && preview?.valid && preview.index === index) {
+    const target = boardEl.children[preview.row * SIZE + preview.col].getBoundingClientRect();
+    const from = ghostEl.getBoundingClientRect();
+    const dx = target.left - from.left;
+    const dy = target.top - from.top;
+    const clone = ghostEl.cloneNode(true);
+    clone.removeAttribute('id'); clone.classList.add('snap-ghost');
+    clone.style.left = `${from.left}px`; clone.style.top = `${from.top}px`;
+    document.body.append(clone);
+    clone.animate([{ transform: 'translate(0, 0)', opacity: 1 }, { transform: `translate(${dx}px, ${dy}px)`, opacity: 0 }],
+      { duration: FX.reduced ? 1 : FX.drag.snap / FX.scale, easing: FX.easing.fade }).onfinish = () => clone.remove();
     commit(index, preview.row, preview.col);
   } else if (!active && event.type !== 'pointercancel') {
     selected = selected === index ? null : index;
@@ -380,7 +359,19 @@ document.querySelector('#cancel-restart').addEventListener('click', () => restar
 document.querySelector('#confirm-restart').addEventListener('click', resetGame);
 document.querySelector('#play-again').addEventListener('click', resetGame);
 
+const debugEl = document.querySelector('#fx-debug');
+let scorePressTimer;
+scoreEl.addEventListener('pointerdown', () => { scorePressTimer = window.setTimeout(() => { debugEl.hidden = !debugEl.hidden; }, FX.debug.longPress); });
+for (const type of ['pointerup', 'pointercancel', 'pointerleave']) scoreEl.addEventListener(type, () => window.clearTimeout(scorePressTimer));
+document.querySelector('#debug-scale').addEventListener('input', event => {
+  FX.scale = Number(event.target.value);
+  document.querySelector('#debug-scale-value').textContent = `${FX.scale}×`;
+});
+debugEl.addEventListener('click', event => { if (event.target.dataset.trigger) effects.debug(event.target.dataset.trigger); });
+matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', event => { FX.reduced = event.matches; });
+
 render();
+effects.scoreSnap(state.score);
 if (state.ended) setStatus('No more moves — start a new game');
 else if (previous) setStatus('Welcome back. Pick a piece!');
 
