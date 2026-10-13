@@ -33,7 +33,7 @@
             <p>Place blocks. Clear lines. Keep blooming.</p>
           </div>
           <div class="scores" aria-live="polite">
-            <div class="score-card"><span>Score</span><strong id="score">0</strong></div>
+            <div class="score-card score-current"><span>Score</span><strong id="score">0</strong><span id="score-burst" class="score-burst" aria-hidden="true"></span></div>
             <div class="score-card best"><span>Best</span><strong id="best">0</strong></div>
           </div>
         </div>
@@ -41,6 +41,7 @@
         <div class="board-wrap">
           <div class="board-frame">
             <div id="board" class="board" role="grid" aria-label="8 by 8 game board"></div>
+            <div id="clear-layer" class="clear-layer" aria-hidden="true"></div>
             <div id="board-flash" class="board-flash" aria-hidden="true"></div>
           </div>
           <div class="board-foot">

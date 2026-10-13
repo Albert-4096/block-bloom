@@ -7,7 +7,9 @@ const ghostEl = document.querySelector('#drag-ghost');
 const statusEl = document.querySelector('#status');
 const scoreEl = document.querySelector('#score');
 const bestEl = document.querySelector('#best');
+const scoreBurstEl = document.querySelector('#score-burst');
 const flashEl = document.querySelector('#board-flash');
+const clearLayerEl = document.querySelector('#clear-layer');
 const helpDialog = document.querySelector('#help-dialog');
 const gameOverDialog = document.querySelector('#game-over-dialog');
 const restartDialog = document.querySelector('#restart-dialog');
@@ -35,6 +37,7 @@ let state = previous || { board: emptyBoard(), pieces: drawPieces(emptyBoard()),
 let selected = null;
 let drag = null;
 let preview = null;
+let scoreBurstTimer = null;
 
 function save() {
   try {
@@ -53,7 +56,8 @@ function makeTile(color) {
   return tile;
 }
 
-function renderBoard() {
+function renderBoard(placedCells = []) {
+  const placed = new Set(placedCells.map(([row, col]) => row * SIZE + col));
   const cells = [];
   for (let row = 0; row < SIZE; row++) {
     for (let col = 0; col < SIZE; col++) {
@@ -65,7 +69,11 @@ function renderBoard() {
       cell.tabIndex = row === 0 && col === 0 ? 0 : -1;
       cell.setAttribute('role', 'gridcell');
       cell.setAttribute('aria-label', `Row ${row + 1}, column ${col + 1}, ${state.board[row][col] ? 'filled' : 'empty'}`);
-      if (state.board[row][col]) cell.append(makeTile(state.board[row][col]));
+      if (state.board[row][col]) {
+        const tile = makeTile(state.board[row][col]);
+        if (placed.has(row * SIZE + col)) tile.classList.add('tile-placed');
+        cell.append(tile);
+      }
       cells.push(cell);
     }
   }
@@ -87,7 +95,7 @@ function makePieceGrid(piece, className = '') {
   return grid;
 }
 
-function renderTray() {
+function renderTray(refilled = false) {
   const slots = state.pieces.map((piece, index) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -106,15 +114,19 @@ function renderTray() {
     }
     if (selected === index) button.classList.add('is-selected');
     button.setAttribute('aria-label', `Piece ${index + 1}, ${piece.shape.cells.length} blocks. Select to place.`);
+    if (refilled) {
+      button.classList.add('piece-arrived');
+      button.style.setProperty('--arrival-index', index);
+    }
     button.append(makePieceGrid(piece));
     return button;
   });
   trayEl.replaceChildren(...slots);
 }
 
-function render() {
-  renderBoard();
-  renderTray();
+function render(placedCells = [], refilled = false) {
+  renderBoard(placedCells);
+  renderTray(refilled);
   scoreEl.textContent = state.score.toLocaleString();
   bestEl.textContent = state.best.toLocaleString();
   save();
@@ -123,7 +135,7 @@ function render() {
 function setStatus(message) { statusEl.textContent = message; }
 
 function clearPreview() {
-  for (const cell of boardEl.querySelectorAll('.preview-valid, .preview-invalid')) cell.classList.remove('preview-valid', 'preview-invalid');
+  for (const cell of boardEl.querySelectorAll('.preview-valid, .preview-invalid, .preview-clear')) cell.classList.remove('preview-valid', 'preview-invalid', 'preview-clear');
   preview = null;
 }
 
@@ -139,6 +151,58 @@ function showPreview(index, row, col) {
     if (r < 0 || c < 0 || r >= SIZE || c >= SIZE) continue;
     boardEl.children[r * SIZE + c].classList.add(valid ? 'preview-valid' : 'preview-invalid');
   }
+  if (valid) {
+    const projected = new Set(piece.shape.cells.map(([dr, dc]) => (row + dr) * SIZE + col + dc));
+    for (let r = 0; r < SIZE; r++) {
+      if (state.board[r].every((color, c) => color || projected.has(r * SIZE + c))) {
+        for (let c = 0; c < SIZE; c++) boardEl.children[r * SIZE + c].classList.add('preview-clear');
+      }
+    }
+    for (let c = 0; c < SIZE; c++) {
+      if (state.board.every((line, r) => line[c] || projected.has(r * SIZE + c))) {
+        for (let r = 0; r < SIZE; r++) boardEl.children[r * SIZE + c].classList.add('preview-clear');
+      }
+    }
+  }
+}
+
+function celebrateClear(before, result, placedCells, pieceColor) {
+  const layer = document.createElement('div');
+  layer.className = 'clear-grid';
+  const placed = new Map(placedCells.map(([row, col]) => [row * SIZE + col, pieceColor]));
+  for (let row = 0; row < SIZE; row++) {
+    for (let col = 0; col < SIZE; col++) {
+      if (!result.rows.includes(row) && !result.cols.includes(col)) continue;
+      const color = placed.get(row * SIZE + col) || before[row][col];
+      if (!color) continue;
+      const cell = document.createElement('span');
+      cell.className = 'clear-cell';
+      cell.style.gridRow = row + 1;
+      cell.style.gridColumn = col + 1;
+      cell.style.setProperty('--clear-delay', `${Math.min(180, (row + col) * 14)}ms`);
+      cell.append(makeTile(color));
+      layer.append(cell);
+    }
+  }
+  clearLayerEl.append(layer);
+  window.setTimeout(() => layer.remove(), 680);
+}
+
+function showScoreGain(points, lines) {
+  scoreBurstEl.textContent = `+${points}`;
+  scoreBurstEl.classList.remove('is-visible');
+  void scoreBurstEl.offsetWidth;
+  scoreBurstEl.classList.add('is-visible');
+  window.clearTimeout(scoreBurstTimer);
+  scoreBurstTimer = window.setTimeout(() => scoreBurstEl.classList.remove('is-visible'), 680);
+  scoreEl.classList.remove('score-pulse');
+  void scoreEl.offsetWidth;
+  scoreEl.classList.add('score-pulse');
+  if (lines) {
+    flashEl.classList.remove('flash');
+    void flashEl.offsetWidth;
+    flashEl.classList.add('flash');
+  }
 }
 
 function finishIfStuck() {
@@ -153,11 +217,18 @@ function finishIfStuck() {
 
 function commit(index, row, col) {
   if (state.ended || !state.pieces[index]) return false;
-  const result = place(state.board, state.pieces[index], row, col, state.streak);
+  const piece = state.pieces[index];
+  const before = state.board;
+  const placedCells = piece.shape.cells.map(([dr, dc]) => [row + dr, col + dc]);
+  const result = place(before, piece, row, col, state.streak);
   if (!result) {
-    setStatus('That piece won’t fit there');
+    setStatus('That spot is blocked. Try another square.');
     return false;
   }
+  if (result.lines) {
+    celebrateClear(before, result, placedCells, piece.color);
+  }
+  const oldBest = state.best;
   state.board = result.board;
   state.score += result.points;
   state.best = Math.max(state.best, state.score);
@@ -165,15 +236,15 @@ function commit(index, row, col) {
   state.pieces[index] = null;
   selected = null;
   clearPreview();
-  if (state.pieces.every(piece => piece === null)) state.pieces = drawPieces(state.board);
-  render();
+  const refilled = state.pieces.every(piece => piece === null);
+  if (refilled) state.pieces = drawPieces(state.board);
+  render(placedCells, refilled);
+  showScoreGain(result.points, result.lines);
   if (result.lines) {
-    flashEl.classList.remove('flash');
-    void flashEl.offsetWidth;
-    flashEl.classList.add('flash');
-    setStatus(result.lines > 1 ? `${result.lines} lines cleared! +${result.points}` : `Line cleared! +${result.points}`);
+    const lineMessage = result.lines > 1 ? `${result.lines} lines cleared` : 'Line cleared';
+    setStatus(`${lineMessage}!${result.streak > 1 ? ` ${result.streak} in a row.` : ''} +${result.points}${state.score > oldBest && oldBest > 0 ? ' · New best!' : ''}`);
   } else {
-    setStatus(`Lovely move! +${result.points}`);
+    setStatus(`Placed! +${result.points}${state.score > oldBest && oldBest > 0 ? ' · New best!' : ''}`);
   }
   finishIfStuck();
   return true;
@@ -183,6 +254,10 @@ function resetGame() {
   state = { board: emptyBoard(), pieces: drawPieces(emptyBoard()), score: 0, best: state.best, streak: 0, ended: false };
   selected = null;
   clearPreview();
+  clearLayerEl.replaceChildren();
+  flashEl.classList.remove('flash');
+  window.clearTimeout(scoreBurstTimer);
+  scoreBurstEl.classList.remove('is-visible');
   render();
   setStatus('Pick a piece to begin');
   if (gameOverDialog.open) gameOverDialog.close();
@@ -265,7 +340,8 @@ trayEl.addEventListener('keydown', event => {
 boardEl.addEventListener('click', event => {
   const cell = event.target.closest('.board-cell');
   if (!cell || selected === null) return;
-  commit(selected, Number(cell.dataset.row), Number(cell.dataset.col));
+  const placed = commit(selected, Number(cell.dataset.row), Number(cell.dataset.col));
+  if (placed && event.detail === 0 && !state.ended) trayEl.querySelector('.piece-slot:not(:disabled)')?.focus();
 });
 
 boardEl.addEventListener('pointermove', event => {

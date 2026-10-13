@@ -1,4 +1,4 @@
-const CACHE = 'block-bloom-v4';
+const CACHE = 'block-bloom-v5';
 const ASSETS = ['/', '/index.html', '/style.css', '/app.js', '/game.js', '/manifest.webmanifest', '/icon.svg', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/fonts/dm-sans-latin.woff2', '/fonts/bricolage-grotesque-latin.woff2'];
 
 self.addEventListener('install', event => {
